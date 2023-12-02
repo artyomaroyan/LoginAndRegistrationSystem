@@ -9,5 +9,4 @@ public class LoginAndRegistrationSystemApplication {
     public static void main(String[] args) {
         SpringApplication.run(LoginAndRegistrationSystemApplication.class, args);
     }
-
 }
