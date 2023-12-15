@@ -18,7 +18,7 @@ import java.util.UUID;
 public class UserResponse {
 
     private UUID userid;
-    private LocalDateTime crateDate;
+    private LocalDateTime createDate;
     private LocalDateTime updateDate;
     private String username;
     private String firstName;

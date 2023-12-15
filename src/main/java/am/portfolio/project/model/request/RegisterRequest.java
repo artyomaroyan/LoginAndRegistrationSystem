@@ -17,7 +17,7 @@ import java.util.Collection;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserRequest {
+public class RegisterRequest {
 
     @NotEmpty(message = "The username must not be empty")
     @Size(min = 3, max = 25, message = "The username must be between 3 and 15 characters long")

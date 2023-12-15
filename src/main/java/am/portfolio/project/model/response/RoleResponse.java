@@ -1,5 +1,6 @@
 package am.portfolio.project.model.response;
 
+import am.portfolio.project.enums.RoleEnum;
 import lombok.*;
 
 import java.util.UUID;
@@ -15,6 +16,10 @@ import java.util.UUID;
 @AllArgsConstructor
 public class RoleResponse {
 
-    private UUID roelId;
-    private String name;
+    private UUID roleId;
+    private RoleEnum name;
+
+    public RoleResponse(RoleEnum name) {
+        this.name = name;
+    }
 }
