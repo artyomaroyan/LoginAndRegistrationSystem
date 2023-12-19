@@ -5,6 +5,7 @@ import am.portfolio.project.authentication.dto.AuthenticationResponse;
 import am.portfolio.project.authentication.service.AuthenticationService;
 import am.portfolio.project.model.request.RegisterRequest;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,7 +30,12 @@ public class AuthenticationController {
             method = RequestMethod.POST
     )
     public ResponseEntity<Optional<AuthenticationResponse>> register(@RequestBody RegisterRequest request) {
-        return ResponseEntity.ok(authenticationService.register(request));
+        if (request != null &&
+                StringUtils.isNotBlank(request.getUsername()) &&
+                StringUtils.isNotBlank(request.getPassword())) {
+            return ResponseEntity.ok(authenticationService.register(request));
+        }
+        return ResponseEntity.badRequest().build();
     }
 
     @RequestMapping(
@@ -37,6 +43,12 @@ public class AuthenticationController {
             method = RequestMethod.POST
     )
     public ResponseEntity<Optional<AuthenticationResponse>> authenticate(@RequestBody AuthenticationRequest request) {
-        return ResponseEntity.ok(authenticationService.authenticate(request));
+
+        if (request != null &&
+                StringUtils.isNotBlank(request.getUsername()) &&
+                StringUtils.isNotBlank(request.getPassword())) {
+            return ResponseEntity.ok(authenticationService.authenticate(request));
+        }
+        return ResponseEntity.badRequest().build();
     }
 }

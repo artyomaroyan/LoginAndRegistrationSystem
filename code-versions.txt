@@ -480,3 +480,47 @@ public class AuthenticationController {
         return http.build();
     }
 
+
+
+    // JWT Secret Key Generator
+
+            int keySizeInBits = 250;
+            byte[] jwtSecretKey = generateSecretKey(keySizeInBits);
+            String encodedKey = encodeKey(jwtSecretKey);
+            System.out.println("JWT secret key: " + encodedKey);
+        }
+
+        private static byte[] generateSecretKey(int keySizeInBits) {
+            SecureRandom secure = new SecureRandom();
+            byte[] key = new byte[keySizeInBits / 8];
+            secure.nextBytes(key);
+            return key;
+        }
+
+        private static String encodeKey(byte[] key) {
+            return Base64.getEncoder().encodeToString(key);
+        }
+
+        // JWT Secret Key Generator
+
+        int keySizeInBits = 256;
+                byte[] jwtSecretKey = generateSecretKey(keySizeInBits);
+                String encodedKey = encodeKey(jwtSecretKey);
+                System.out.println("JWT secret key: " + encodedKey);
+            }
+
+            private static byte[] generateSecretKey(int keySizeInBits) {
+                try {
+                    KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+                    keyGenerator.init(keySizeInBits);
+                    SecretKey secretKey = keyGenerator.generateKey();
+                    return secretKey.getEncoded();
+                } catch (Exception ex) {
+                    throw new RuntimeException("Error generating secure JWT secret key", ex);
+                }
+            }
+
+            private static String encodeKey(byte[] key) {
+                return Base64.getEncoder().encodeToString(key);
+            }
+

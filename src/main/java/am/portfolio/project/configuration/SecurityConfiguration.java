@@ -40,7 +40,10 @@ public class SecurityConfiguration {
             "/configuration/security",
             "/swagger-ui/**",
             "/webjars/**",
-            "/swagger-ui.html"
+            "/swagger-ui.html",
+            "/api/v1/auth/token/**",
+            "/api/v1/auth/register/**",
+            "/api/v1/user/register/**"
     };
 
     @Bean
@@ -48,8 +51,6 @@ public class SecurityConfiguration {
         http.csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests((request) -> request
                         .requestMatchers(WHITE_LIST_URL)
-                            .permitAll()
-                        .requestMatchers("/api/v1/auth/token/**", "/api/v1/auth/register/**", "/api/v1/user/register/**")
                             .permitAll()
                             .anyRequest()
                             .authenticated()
