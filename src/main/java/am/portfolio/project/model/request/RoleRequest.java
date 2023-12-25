@@ -1,5 +1,6 @@
 package am.portfolio.project.model.request;
 
+import am.portfolio.project.enums.RoleEnum;
 import lombok.*;
 
 /**
@@ -13,5 +14,5 @@ import lombok.*;
 @AllArgsConstructor
 public class RoleRequest {
 
-    private String name;
+    private RoleEnum name;
 }

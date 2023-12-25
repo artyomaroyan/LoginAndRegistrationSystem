@@ -5,15 +5,11 @@ spring:
     password: root
     driver-class-name: org.postgresql.Driver
   jpa:
-    generate-ddl: true
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update
     show-sql: true
-  thymeleaf:
-    cache: false
-#logging:
-#  level:
-#    root: DEBUG
+    properties:
+      hibernate:
+        format-sql: true
+    database: postgresql
+    database-platform: org.hibernate.dialect.PostgreSQLDialect

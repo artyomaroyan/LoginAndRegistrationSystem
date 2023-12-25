@@ -1,5 +1,6 @@
 package am.portfolio.project.model.entity;
 
+import am.portfolio.project.enums.RoleEnum;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -32,11 +33,12 @@ public class Role {
     @Column(name = "role_id", nullable = false, unique = true, length = 8)
     private UUID roleId;
 
-    @Column(name = "name")
-    private String name;
-
-    @ManyToMany(fetch = EAGER, cascade = ALL)
+    @ManyToMany(mappedBy = "roles")
     private Collection<User> users;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role_name", length = 20)
+    private RoleEnum name;
 
     @ManyToMany(fetch = EAGER, cascade = ALL)
     @JoinTable(
@@ -45,4 +47,8 @@ public class Role {
             inverseJoinColumns = @JoinColumn(name = "privilege_id", referencedColumnName = "privilege_id")
     )
     private Collection<Privilege> privileges;
+
+    public Role(RoleEnum name) {
+        this.name = name;
+    }
 }

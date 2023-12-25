@@ -1,0 +1,526 @@
+#    generate-ddl: true
+#    properties:
+#      hibernate:
+#        dialect: org.hibernate.dialect.PostgreSQLDialect
+#    hibernate:
+#      ddl-auto: update
+#    show-sql: true
+#  thymeleaf:
+#    cache: false
+
+#logging:
+#  level:
+#    root: DEBUG
+
+  application:
+    security:
+      jwt:
+        secret-key: secret123
+        expiration: 86400000 # one day
+        refresh-token:
+          expiration: 172800000 # two days
+
+          // authority
+          roles.stream()
+                          .map(role -> new SimpleGrantedAuthority(role.getName()))
+                          .collect(Collectors.toList());
+
+            // JWT Token Generation V_1
+
+// One day in milliseconds, should be shorter in production
+    private static final long EXPIRATION_TIME = 86400000;
+    private static final String PREFIX = "Bearer";
+    // Generate secret key. Only for demonstration purposes.
+    // In production, you should read it from the application configuration
+    private static final Key key = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+
+    // Generate signed JWT token
+    public String getToken(final String username) {
+        return Jwts.builder()
+                .setSubject(username)
+                .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
+                .signWith(key)
+                .compact();
+    }
+
+    // Get a token from request Authorization header, verify the token, and get username
+    public String getAuthUser(HttpServletRequest request) {
+
+        String token = request.getHeader(HttpHeaders.AUTHORIZATION);
+
+        if (token != null) {
+
+            return Jwts
+                    .parserBuilder()
+                    .setSigningKey(key).build()
+                    .parseClaimsJws(token.replace(PREFIX, ""))
+                    .getBody()
+                    .getSubject();
+        }
+        return null;
+    }
+
+    @Component
+    public class AuthenticationFilter extends OncePerRequestFilter {
+
+    private final JWTService jwtService;
+
+        @Autowired
+        public AuthenticationFilter(JWTService jwtService) {
+            this.jwtService = jwtService;
+        }
+
+        @Override
+        protected void doFilterInternal(
+                @NonNull final HttpServletRequest request, @NonNull final HttpServletResponse response,
+                @NonNull final FilterChain filterChain) throws ServletException, IOException {
+
+            // Get token from the Authorization header
+            String jws = request.getHeader(HttpHeaders.AUTHORIZATION);
+            if (jws != null) {
+
+                // Verify token and get the user
+                String user = jwtService.getAuthUser(request);
+
+                // Authenticate
+                Authentication authentication = new UsernamePasswordAuthenticationToken(
+                        user, null, Collections.emptyList()
+                );
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
+            filterChain.doFilter(request, response);
+        }
+    }
+
+
+    @Component
+    public class AuthEntryPoint implements AuthenticationEntryPoint {
+
+        @Override
+        public void commence(
+                final HttpServletRequest request, final HttpServletResponse response,
+                final AuthenticationException authException) throws IOException, ServletException {
+
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            PrintWriter writer = response.getWriter();
+            writer.println("Error: " + authException.getMessage());
+        }
+    }
+
+    public class LoginController {
+
+        private final JWTService jwtService;
+        private final AuthenticationManager authenticationManager;
+
+        @RequestMapping(
+                value = "/login",
+                method = POST
+        )
+        public ResponseEntity<?> getToken(@RequestBody AccountCredentials credentials) {
+            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                    credentials.username(), credentials.password()
+            );
+
+            Authentication auth = authenticationManager.authenticate(authToken);
+
+            // Generate token
+            String jwts = jwtService.getToken(auth.getName());
+
+            // Build response with the generated token
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwts)
+                    .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, "Authorization")
+                    .build();
+        }
+
+
+        // user details service
+        @Service
+        @RequiredArgsConstructor
+        public class UserDetailsServiceImplementation implements UserDetailsService {
+
+            private final UserRepository userRepository;
+
+            /**
+             * Loads user details by username for authentication
+             *
+             * @param username The username of the user to load
+             * @return UserDetails object representing the loaded user
+             * @throws UsernameNotFoundException If the user with the given username is not found
+             */
+            @Override
+            public UserDetails loadUserByUsername(final String username) throws UsernameNotFoundException {
+
+                Optional<User> user = userRepository.findUserByUsername(username);
+                UserBuilder builder;
+
+                if (user.isPresent()) {
+                    User currentUser = user.get();
+                    builder = org.springframework.security.core.userdetails.User.withUsername(username);
+                    builder.password(currentUser.getPassword());
+                    builder.roles(String.valueOf(currentUser.getRoles()).toUpperCase());
+                } else {
+                    throw new UsernameNotFoundException("User with username " + username + " does not found:");
+                }
+                return builder.build();
+            }
+        }
+
+
+        // JWTService
+
+        package am.portfolio.project.authentication.token;
+
+        import io.jsonwebtoken.Claims;
+        import io.jsonwebtoken.Jwts;
+        import io.jsonwebtoken.SignatureAlgorithm;
+        import io.jsonwebtoken.io.Decoders;
+        import io.jsonwebtoken.security.Keys;
+        import org.springframework.security.core.userdetails.UserDetails;
+        import org.springframework.stereotype.Service;
+
+        import java.security.Key;
+        import java.util.Date;
+        import java.util.HashMap;
+        import java.util.Map;
+        import java.util.function.Function;
+
+        /**
+         * @author Artyom Aroyan
+         */
+
+        @Service
+        public class JWTService {
+
+            private static final String SECRET_KEY = "404635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
+
+            public String extractUsername(String token) {
+                return extractSingleClaim(token, Claims::getSubject);
+            }
+
+            public <T> T extractSingleClaim(String token, Function<Claims, T> claimResolver) {
+                final Claims claim = extractAllClaims(token);
+                return claimResolver.apply(claim);
+            }
+
+            public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
+                return Jwts.builder()
+                        .setClaims(extraClaims)
+                        .setSubject(userDetails.getUsername())
+                        .setIssuedAt(new Date(System.currentTimeMillis()))
+                        .setExpiration(new Date(System.currentTimeMillis() + 60 * 1000 * 60))
+                        .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                        .compact();
+            }
+
+            public String generateToken(UserDetails userDetails) {
+                return generateToken(new HashMap<>(), userDetails);
+            }
+
+            public boolean isTokenValid(String token, UserDetails userDetails) {
+                final String username = extractUsername(token);
+                return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+            }
+
+            private boolean isTokenExpired(String token) {
+                return extractExpiration(token).before(new Date());
+            }
+
+            private Date extractExpiration(String token) {
+                return extractSingleClaim(token, Claims::getExpiration);
+            }
+
+            private Claims extractAllClaims(String token) {
+                return Jwts.parserBuilder()
+                        .setSigningKey(getSigningKey())
+                        .build()
+                        .parseClaimsJws(token)
+                        .getBody();
+            }
+
+            private Key getSigningKey() {
+                byte[] key = Decoders.BASE64.decode(SECRET_KEY);
+                return Keys.hmacShaKeyFor(key);
+            }
+        }
+
+        //JWTAuthenticationFilter
+
+        package am.portfolio.project.authentication.token;
+
+        import jakarta.servlet.FilterChain;
+        import jakarta.servlet.ServletException;
+        import jakarta.servlet.http.HttpServletRequest;
+        import jakarta.servlet.http.HttpServletResponse;
+        import lombok.NonNull;
+        import lombok.RequiredArgsConstructor;
+        import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+        import org.springframework.security.core.context.SecurityContextHolder;
+        import org.springframework.security.core.userdetails.UserDetails;
+        import org.springframework.security.core.userdetails.UserDetailsService;
+        import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+        import org.springframework.stereotype.Component;
+        import org.springframework.web.filter.OncePerRequestFilter;
+
+        import java.io.IOException;
+
+        /**
+         * @author Artyom Aroyan
+         */
+
+        @Component
+        @RequiredArgsConstructor
+        public class JWTAuthenticationFilter extends OncePerRequestFilter {
+
+            private final JWTService jwtService;
+            private final UserDetailsService userDetailsService;
+
+            @Override
+            protected void doFilterInternal(@NonNull final HttpServletRequest request,
+                                            @NonNull final HttpServletResponse response,
+                                            @NonNull final FilterChain filterChain) throws ServletException, IOException {
+
+                final String authHeader = request.getHeader("Authorization");
+                final String token;
+                final String username;
+
+                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+                token = authHeader.substring(7);
+                username = jwtService.extractUsername(token);
+
+                if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
+
+                    if (jwtService.isTokenValid(token, userDetails)) {
+                        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities()
+                        );
+
+                        authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+                    }
+                }
+                filterChain.doFilter(request, response);
+            }
+        }
+
+// AuthenticationService
+
+package am.portfolio.project.authentication.service;
+
+import am.portfolio.project.authentication.dto.AuthenticationRequest;
+import am.portfolio.project.model.request.RegisterRequest;
+import am.portfolio.project.authentication.dto.AuthenticationResponse;
+
+import java.util.Optional;
+
+/**
+ * @author Artyom Aroyan
+ */
+public interface AuthenticationService {
+
+    Optional<AuthenticationResponse> register(RegisterRequest request);
+
+    Optional<AuthenticationResponse> authenticate(AuthenticationRequest request);
+}
+
+
+package am.portfolio.project.authentication.service.implimentation;
+
+import am.portfolio.project.authentication.dto.AuthenticationRequest;
+import am.portfolio.project.authentication.dto.AuthenticationResponse;
+import am.portfolio.project.authentication.service.AuthenticationService;
+import am.portfolio.project.authentication.token.JWTService;
+import am.portfolio.project.model.entity.Role;
+import am.portfolio.project.model.entity.User;
+import am.portfolio.project.model.request.RegisterRequest;
+import am.portfolio.project.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Optional;
+
+import static am.portfolio.project.enums.RoleEnum.USER;
+
+/**
+ * @author Artyom Aroyan
+ */
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class AuthenticationServiceImpl implements AuthenticationService {
+
+    private final JWTService jwtService;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
+
+    @Override
+    public Optional<AuthenticationResponse> register(RegisterRequest request) {
+
+        var defaultRole = new ArrayList<>(convertToRoleFromEnum());
+
+        var user = User.builder()
+                .createDate(LocalDateTime.now())
+                .updateDate(LocalDateTime.now())
+                .username(request.getUsername())
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .email(request.getEmail())
+                .age(request.getAge())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .isActive(true)
+                .roles(defaultRole)
+                .build();
+        userRepository.save(user);
+        var jwtToken = jwtService.generateToken(user);
+        return Optional.ofNullable(AuthenticationResponse.builder()
+                .token(jwtToken)
+                .build());
+    }
+
+    @Override
+    public Optional<AuthenticationResponse> authenticate(AuthenticationRequest request) {
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                        request.getUsername(),
+                        request.getPassword()
+                )
+        );
+        var user = userRepository.findUserByUsername(request.getUsername()).orElseThrow();
+        var jwt = jwtService.generateToken(user);
+        return Optional.ofNullable(AuthenticationResponse.builder()
+                .token(jwt)
+                .build());
+    }
+
+    private Collection<Role> convertToRoleFromEnum() {
+        return Collections.singleton(new Role(USER.name()));
+    }
+}
+
+// AuthenticationController
+
+package am.portfolio.project.authentication.controller;
+
+import am.portfolio.project.authentication.dto.AuthenticationRequest;
+import am.portfolio.project.authentication.dto.AuthenticationResponse;
+import am.portfolio.project.authentication.service.AuthenticationService;
+import am.portfolio.project.model.request.RegisterRequest;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Optional;
+
+/**
+ * @author Artyom Aroyan
+ */
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/v1/auth")
+public class AuthenticationController {
+
+    private final AuthenticationService authenticationService;
+
+    @RequestMapping(
+            value = "/register",
+            method = RequestMethod.POST
+    )
+    public ResponseEntity<Optional<AuthenticationResponse>> register(@RequestBody RegisterRequest request) {
+        return ResponseEntity.ok(authenticationService.register(request));
+    }
+
+    @RequestMapping(
+            value = "/token",
+            method = RequestMethod.POST
+    )
+    public ResponseEntity<Optional<AuthenticationResponse>> authenticate(@RequestBody AuthenticationRequest request) {
+        return ResponseEntity.ok(authenticationService.authenticate(request));
+    }
+}
+
+
+// security configurations
+
+@Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http.csrf(AbstractHttpConfigurer::disable).cors(withDefaults())
+                .sessionManagement((session) -> session.sessionCreationPolicy(STATELESS))
+                .authorizeHttpRequests((auth) -> auth
+                        .requestMatchers(WHITE_LIST_URL)
+                            .permitAll()
+                        .requestMatchers("/api/v1/auth/token/**", "/api/v1/auth/register/**", "/api/v1/user/register/**")
+                            .permitAll()
+                        .requestMatchers("/api/v1/user/sort/**", "/api/v1/user/username/**", "/api/v1/user/update/**")
+                            .hasAuthority(RoleEnum.USER.name())
+                            .anyRequest()
+                            .authenticated()
+                );
+
+        return http.build();
+    }
+
+
+
+    // JWT Secret Key Generator
+
+            int keySizeInBits = 250;
+            byte[] jwtSecretKey = generateSecretKey(keySizeInBits);
+            String encodedKey = encodeKey(jwtSecretKey);
+            System.out.println("JWT secret key: " + encodedKey);
+        }
+
+        private static byte[] generateSecretKey(int keySizeInBits) {
+            SecureRandom secure = new SecureRandom();
+            byte[] key = new byte[keySizeInBits / 8];
+            secure.nextBytes(key);
+            return key;
+        }
+
+        private static String encodeKey(byte[] key) {
+            return Base64.getEncoder().encodeToString(key);
+        }
+
+        // JWT Secret Key Generator
+
+        int keySizeInBits = 256;
+                byte[] jwtSecretKey = generateSecretKey(keySizeInBits);
+                String encodedKey = encodeKey(jwtSecretKey);
+                System.out.println("JWT secret key: " + encodedKey);
+            }
+
+            private static byte[] generateSecretKey(int keySizeInBits) {
+                try {
+                    KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+                    keyGenerator.init(keySizeInBits);
+                    SecretKey secretKey = keyGenerator.generateKey();
+                    return secretKey.getEncoded();
+                } catch (Exception ex) {
+                    throw new RuntimeException("Error generating secure JWT secret key", ex);
+                }
+            }
+
+            private static String encodeKey(byte[] key) {
+                return Base64.getEncoder().encodeToString(key);
+            }
+
